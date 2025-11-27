@@ -25,9 +25,8 @@ class User(Base):
 
 class Master(Base):
     """
-    Мастер маникюра / педикюра. Если у тебя один салон и мастера не выбирают — 
-    можно оставить одного мастера или вообще убрать эту таблицу.
-    Но лучше оставить — вдруг потом захочешь нескольких мастеров.
+    Мастер маникюра / педикюра.
+    Один мастер может предоставлять множество услуг (many-to-many с Service).
     """
     __tablename__ = "masters"
 
@@ -36,18 +35,30 @@ class Master(Base):
     instagram: Mapped[Optional[str]] = mapped_column(String(100))
     photo: Mapped[Optional[str]] = mapped_column(String(255))               # путь или URL к фото
     description: Mapped[Optional[str]] = mapped_column(Text)
-    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
 
     # Связи
-    bookings: Mapped[List["Booking"]] = relationship("Booking", back_populates="master")
+    # One-to-many: один мастер может иметь множество бронирований
+    bookings: Mapped[List["Booking"]] = relationship(
+        "Booking", 
+        back_populates="master",
+        cascade="all, delete-orphan"
+    )
+    
+    # Many-to-many: один мастер может предоставлять множество услуг
+    # Одна услуга может предоставляться множеством мастеров
     services: Mapped[List["Service"]] = relationship(
-        "Service", secondary="master_service_association", back_populates="masters"
+        "Service",
+        secondary="master_service_association",
+        back_populates="masters",
+        lazy="selectin"  # Загружаем услуги при загрузке мастера
     )
 
 
 class Service(Base):
     """
     Услуга: «Классический маникюр», «Покрытие гель-лак + дизайн», «Наращивание» и т.д.
+    Одна услуга может предоставляться множеством мастеров (many-to-many с Master).
     """
     __tablename__ = "services"
 
@@ -57,23 +68,37 @@ class Service(Base):
     duration_min: Mapped[int] = mapped_column(Integer, nullable=False)       # длительность в минутах (90, 120 и т.д.)
     description: Mapped[Optional[str]] = mapped_column(Text)
     photo: Mapped[Optional[str]] = mapped_column(String(255))
-    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
-
-    # Если услугу могут делать не все мастера — связь many-to-many
-    masters: Mapped[List["Master"]] = relationship(
-        "Master", secondary="master_service_association", back_populates="services"
-    )
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
 
     # Связи
-    bookings: Mapped[List["Booking"]] = relationship("Booking", back_populates="service")
+    # One-to-many: одна услуга может быть в множестве бронирований
+    bookings: Mapped[List["Booking"]] = relationship(
+        "Booking",
+        back_populates="service",
+        cascade="all, delete-orphan"
+    )
+    
+    # Many-to-many: одна услуга может предоставляться множеством мастеров
+    # Один мастер может предоставлять множество услуг
+    masters: Mapped[List["Master"]] = relationship(
+        "Master",
+        secondary="master_service_association",
+        back_populates="services",
+        lazy="selectin"  # Загружаем мастеров при загрузке услуги
+    )
 
 
-# Связующая таблица, если хочешь назначать услуги конкретным мастерам
+# Связующая таблица для отношения многие-ко-многим между Master и Service
+# Один мастер может предоставлять множество услуг
+# Одна услуга может предоставляться множеством мастеров
 master_service_association = Table(
     "master_service_association",
     Base.metadata,
-    Column("master_id", ForeignKey("masters.id"), primary_key=True),
-    Column("service_id", ForeignKey("services.id"), primary_key=True),
+    Column("master_id", ForeignKey("masters.id", ondelete="CASCADE"), primary_key=True, nullable=False),
+    Column("service_id", ForeignKey("services.id", ondelete="CASCADE"), primary_key=True, nullable=False),
+    # Индексы для быстрого поиска
+    Index("ix_master_service_master", "master_id"),
+    Index("ix_master_service_service", "service_id"),
 )
 
 

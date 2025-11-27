@@ -1,0 +1,15 @@
+.booking-detail {
+  padding-bottom: 24px;
+}
+
+.spinner-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+}
+
+.actions {
+  padding: 16px;
+}
+

@@ -1,0 +1,19 @@
+.master-widget {
+  padding-bottom: 20px;
+}
+
+.form-field {
+  margin-bottom: 16px;
+}
+
+.form-field label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 500;
+  color: var(--tgui--text_color);
+}
+
+.form-field input {
+  width: 100%;
+}
+

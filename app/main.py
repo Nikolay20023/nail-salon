@@ -57,42 +57,52 @@ app = FastAPI(lifespan=lifespan)
 
 # Serve built frontend files
 import os
+from pathlib import Path
 from fastapi.responses import FileResponse
 from fastapi import HTTPException
 
-static_dir = 'app/static/dist' if os.path.exists('app/static/dist') else 'app/static'
+# Определяем директорию с собранным frontend
+webapp_dir = Path('app/static/webapp')
 
-# Handle assets paths - redirect /assets/* to /static/assets/*
-# This must be BEFORE mounting /static to have priority
+# Serve static assets (js, css, images, etc.)
 @app.get("/assets/{file_path:path}")
 async def serve_assets(file_path: str):
-    """Serve assets from static directory"""
-    assets_path = os.path.join(static_dir, 'assets', file_path)
-    if os.path.exists(assets_path):
+    """Serve assets from webapp directory"""
+    assets_path = webapp_dir / 'assets' / file_path
+    if assets_path.exists() and assets_path.is_file():
         return FileResponse(assets_path)
     raise HTTPException(status_code=404, detail="Asset not found")
 
-# SPA fallback route - handle all /static/* paths
-@app.get("/static/{full_path:path}")
-async def serve_static(full_path: str):
-    """Serve static files, falling back to index.html for SPA routes"""
-    file_path = os.path.join(static_dir, full_path)
+# Serve root webapp (main entry point for Telegram Mini App)
+@app.get("/webapp")
+async def serve_webapp_root():
+    """Serve main webapp page"""
+    index_path = webapp_dir / 'index.html'
+    if index_path.exists():
+        return FileResponse(index_path, media_type="text/html")
+    raise HTTPException(status_code=404, detail="WebApp not found. Run 'npm run build' in nails-bot-front/")
+
+# SPA fallback for all webapp routes
+@app.get("/webapp/{full_path:path}")
+async def serve_webapp(full_path: str):
+    """Serve webapp files, falling back to index.html for SPA routes"""
+    file_path = webapp_dir / full_path
     
     # If it's a file, serve it
-    if os.path.isfile(file_path):
+    if file_path.exists() and file_path.is_file():
         return FileResponse(file_path)
     
     # Otherwise, return index.html for SPA routing
-    index_path = os.path.join(static_dir, 'index.html')
-    if os.path.isfile(index_path):
+    index_path = webapp_dir / 'index.html'
+    if index_path.exists():
         return FileResponse(index_path, media_type="text/html")
     
-    raise HTTPException(status_code=404, detail="Static file not found")
+    raise HTTPException(status_code=404, detail="WebApp not found")
 
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],  # Разрешаем локальный фронтенд
+    allow_origins=["*"],  # Разрешаем все источники (т.к. webapp на том же домене)
     allow_credentials=True,
     allow_methods=["*"],  # Разрешаем все методы
     allow_headers=["*"],  # Разрешаем все заголовки

@@ -4,7 +4,7 @@ from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 from app.api.dao import ServiceDAO, MasterDAO, BookingDAO, UserDAO
-from app.api.schemas import ServiceInDB, BookingCreate, BookingPublic, BookingInDB, ServiceFilter
+from app.api.schemas import ServiceInDB, BookingCreate, BookingPublic, BookingInDB, ServiceFilter, TelegramIDModel
 from app.dao.session_maker_fastapi import db
 from app.tg_bot.scheduler_task import schedule_appointment_notification
 from app.dao.models import Booking
@@ -16,14 +16,126 @@ MOSCOW_TZ = pytz.timezone("Europe/Moscow")
 router = APIRouter()
 
 
+@router.get("/services")
+async def get_services(session: AsyncSession = Depends(db.get_db)):
+    """Получить все активные услуги"""
+    return await ServiceDAO.find_all(session=session)
+
+@router.get("/services/{service_id}")
+async def get_service(service_id: int, session: AsyncSession = Depends(db.get_db)):
+    """Получить конкретную услугу"""
+    service = await ServiceDAO.find_one_or_none_by_id(session=session, data_id=service_id)
+    if not service:
+        raise HTTPException(status_code=404, detail="Услуга не найдена")
+    return service
+
+@router.get("/masters")
+async def get_masters(session: AsyncSession = Depends(db.get_db)):
+    """Получить всех активных мастеров"""
+    return await MasterDAO.find_all(session=session)
+
+@router.get("/masters/{master_id}")
+async def get_master(master_id: int, session: AsyncSession = Depends(db.get_db)):
+    """Получить конкретного мастера"""
+    master = await MasterDAO.find_one_or_none_by_id(session=session, data_id=master_id)
+    if not master:
+        raise HTTPException(status_code=404, detail="Мастер не найден")
+    return master
+
+@router.get("/masters/by-service/{service_id}")
+async def get_masters_by_service(service_id: int, session: AsyncSession = Depends(db.get_db)):
+    """Получить мастеров, предоставляющих конкретную услугу"""
+    return await MasterDAO.find_all(session=session, filters=ServiceFilter(id=service_id))
+
+@router.get("/bookings/master/{master_id}")
+async def get_master_bookings(
+    master_id: int,
+    date: str = Query(..., description="Дата в формате YYYY-MM-DD"),
+    session: AsyncSession = Depends(db.get_db)
+):
+    """Получить все бронирования мастера на конкретную дату"""
+    try:
+        from datetime import datetime
+        booking_date = datetime.strptime(date, "%Y-%m-%d").date()
+        
+        query = select(Booking).where(
+            Booking.master_id == master_id,
+            Booking.date == booking_date,
+            Booking.status != 'cancelled'
+        )
+        result = await session.execute(query)
+        bookings = result.scalars().all()
+        
+        return [BookingPublic.model_validate(booking) for booking in bookings]
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Неверный формат даты. Используйте YYYY-MM-DD")
+    except Exception as e:
+        logger.error(f"Error in get_master_bookings: {str(e)}")
+        raise HTTPException(status_code=500, detail="Ошибка при получении бронирований")
+
+# Старые алиасы для обратной совместимости
 @router.get("/service")
 async def get_specialists(session: AsyncSession = Depends(db.get_db)):
-    return await ServiceDAO.find_all(session=session)
+    return await get_services(session)
 
 @router.get("/masters/{serivce_id}")
 async def get_doctors_spec(serivce_id: int, session: AsyncSession = Depends(db.get_db)):
-    return await MasterDAO.find_all(session=session,
-                                    filters=ServiceFilter(id=serivce_id))
+    return await get_masters_by_service(serivce_id, session)
+
+
+@router.post("/users")
+async def create_or_get_user(
+    user_data: dict,
+    session: AsyncSession = Depends(db.get_db_with_commit)
+):
+    """Создать или получить пользователя по telegram_id"""
+    try:
+        telegram_id = user_data.get("telegram_id")
+        logger.info(f"telegram_id={telegram_id}")
+        if not telegram_id:
+            raise HTTPException(status_code=400, detail="telegram_id обязателен")
+        
+        # Ищем существующего пользователя
+        filter = TelegramIDModel(telegram_id=telegram_id)
+        user = await UserDAO.find_one_or_none(session=session, filters=filter)
+        logger.info(f"user={user}")
+        if not user:
+            # Создаем нового пользователя
+            from app.dao.models import User
+            user = User(
+                telegram_id=telegram_id,
+                username=user_data.get("username"),
+                first_name=user_data.get("first_name"),
+                last_name=user_data.get("last_name"),
+                is_admin=False
+            )
+            session.add(user)
+            await session.flush()
+            await session.refresh(user)
+        
+        return {
+            "id": user.id,
+            "telegram_id": user.telegram_id,
+            "username": user.username,
+            "first_name": user.first_name,
+            "phone": user.phone,
+            "is_admin": user.is_admin,
+            # "created_at": user.created_at.isoformat() if user.created_at else None
+        }
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        logger.error(f"Error in create_or_get_user: {str(e)}")
+        raise HTTPException(status_code=500, detail="Ошибка при создании/получении пользователя")
+
+
+@router.post("/booking")
+async def create_booking(
+    booking_request: BookingCreate, 
+    session: AsyncSession = Depends(db.get_db_with_commit)
+):
+    """Создать новое бронирование"""
+    return await book_appointment_and_schedule_notifications(booking_request, session)
 
 
 @router.post("/book")
@@ -167,7 +279,7 @@ async def get_user_bookings(telegram_id: int, session: AsyncSession = Depends(db
             raise HTTPException(status_code=404, detail="Пользователь не найден")
         
         bookings = await BookingDAO.get_user_bookings_with_master_info(session=session, user_id=user_id)
-        return {"bookings": bookings}
+        return bookings
     except HTTPException as e:
         raise e
     except Exception as e:

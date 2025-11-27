@@ -1,0 +1,82 @@
+.booking-new {
+  padding-bottom: 80px;
+}
+
+.spinner-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+}
+
+.selected {
+  background-color: var(--tgui--bg_color);
+}
+
+.datetime-section {
+  padding: 16px;
+}
+
+.date-picker {
+  margin-bottom: 24px;
+}
+
+.date-picker label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 500;
+}
+
+.time-slots {
+  margin-top: 24px;
+}
+
+.time-slots label {
+  display: block;
+  margin-bottom: 12px;
+  font-weight: 500;
+}
+
+.time-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+  gap: 8px;
+}
+
+.time-slot.disabled {
+  opacity: 0.3;
+}
+
+.contact-section {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.booking-summary {
+  margin-top: 24px;
+  padding: 16px;
+  background-color: var(--tgui--secondary_bg_color);
+  border-radius: 12px;
+}
+
+.summary-item {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--tgui--hint_color);
+}
+
+.summary-item:last-child {
+  border-bottom: none;
+}
+
+.summary-total {
+  font-weight: 600;
+  font-size: 18px;
+  margin-top: 8px;
+  padding-top: 16px;
+  border-top: 2px solid var(--tgui--hint_color);
+}
+

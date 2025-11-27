@@ -1,11 +1,22 @@
 from app.config import settings
 
 
+def _get_webapp_url(path: str = "") -> str:
+    """Формирует URL для WebApp
+    Args:
+        path: дополнительный путь (например, "/admin")
+    Returns:
+        Полный URL для WebApp
+    """
+    base_url = settings.BASE_SITE  # Используем BASE_SITE (ngrok URL)
+    return f"{base_url}/webapp{path}"
+
+
 def _get_booking_button():
     """Возвращает кнопку 'Записаться' в зависимости от протокола URL.
     Для HTTPS используется Web App, для HTTP - обычная URL кнопка.
     """
-    front_url = settings.FRONT_SITE
+    front_url = _get_webapp_url()
     if front_url.startswith("https://"):
         # Для HTTPS используем Web App
         return {"text": "🔖 Записаться", "web_app": {"url": front_url}}
@@ -18,12 +29,12 @@ def _get_booking_button():
 
 
 def _get_admin_button():
-    """Возвращает кнопку 'Админ панель'"""
-    admin_url = f"{settings.FRONT_SITE}/admin"
+    """Возвращает кнопку 'Виджет Мастера'"""
+    admin_url = _get_webapp_url("/admin")
     if admin_url.startswith("https://"):
-        return {"text": "⚙️ Админ панель", "web_app": {"url": admin_url}}
+        return {"text": "⚙️ Виджет Мастера", "web_app": {"url": admin_url}}
     else:
-        return {"text": "⚙️ Админ панель", "url": admin_url}
+        return {"text": "⚙️ Виджет Мастера", "url": admin_url}
 
 
 def get_main_kb(is_admin: bool = False):

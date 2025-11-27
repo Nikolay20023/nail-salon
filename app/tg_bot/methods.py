@@ -47,7 +47,7 @@ def format_appointment(appointment, start_text="🗓 <b>Запись на при
 
         📅 Дата: {appointment_date}
         🕒 Время: {appointment['time']}
-        👨‍⚕️ Мастер: {appointment['doctor_full_name']}
+        👨‍⚕️ Мастер: {appointment['master_full_name']}
         🏥 Услуга: {appointment['service']}
 
         ℹ️ Номер записи: {appointment['id']}
